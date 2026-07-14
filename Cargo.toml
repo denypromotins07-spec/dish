@@ -1,0 +1,84 @@
+[workspace]
+resolver = "2"
+members = ["crates/core-engine"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Trading Bot Team"]
+license = "MIT"
+
+[workspace.dependencies]
+# Lock-free concurrency primitives
+crossbeam = "0.8.4"
+crossbeam-channel = "0.5.12"
+crossbeam-queue = "0.3.11"
+
+# High-performance serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+bincode = "1.3"
+
+# Memory-mapped files and zero-copy I/O
+memmap2 = "0.9"
+bytes = "1.6"
+
+# Time handling
+chrono = { version = "0.4", features = ["serde"] }
+instant = "0.1"
+
+# Hardware affinity and thread pinning
+affinity = "0.1"
+libc = "0.2"
+
+# Async runtime (minimal footprint)
+tokio = { version = "1.37", features = ["rt-multi-thread", "sync", "time"], default-features = false }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json"] }
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+[profile.release]
+# Maximum optimization level
+opt-level = 3
+# Link Time Optimization for cross-crate inlining
+lto = "fat"
+# Single codegen unit for better optimization (longer compile, faster runtime)
+codegen-units = 1
+# Panic abort for minimal binary size and no unwind overhead
+panic = "abort"
+# Strip debug symbols
+strip = true
+# Target CPU for AMD Zen 4 (Ryzen AI 5)
+# znver4 is optimal for Ryzen 7000 series, fallback to znver3 for compatibility
+
+[profile.release-debug]
+inherits = "release"
+debug = true
+strip = false
+panic = "unwind"
+
+[profile.bench]
+inherits = "release"
+debug = true
+
+# Custom profile for absolute minimal latency
+[profile.production]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+# Additional aggressive optimizations
+rpath = false
+overflow-checks = false
+debug-assertions = false
+
+[workspace.lints.rust]
+unsafe_code = "warn"
+unused_imports = "warn"
+unused_variables = "warn"
