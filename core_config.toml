@@ -1,0 +1,103 @@
+# Core Infrastructure Configuration - AMD Ryzen AI 5 Optimized
+# Strict Memory Limit: 14GB Total System Usage
+
+[system]
+# Hard memory cap in bytes (14GB)
+max_memory_bytes = 14826065920
+# Safety margin before enforcement triggers (95% of limit)
+memory_enforcement_threshold = 0.95
+# GC aggressive trigger threshold (90% of limit)
+gc_trigger_threshold = 0.90
+
+[cpu]
+# AMD Ryzen AI 5 - Zen 4 Architecture
+# Physical cores: 6, Logical threads: 12
+# L3 Cache: 16MB (shared across CCD)
+physical_cores = 6
+logical_threads = 12
+l3_cache_size_mb = 16
+
+# Thread affinity mapping for critical trading threads
+# Pinning to avoid cross-CCD latency
+[thread_affinity]
+# Core 0-1: Network I/O (WebSocket handlers)
+network_io_cores = [0, 1]
+# Core 2-3: Event processing and order matching
+event_engine_cores = [2, 3]
+# Core 4-5: Strategy execution and risk management
+strategy_cores = [4, 5]
+# Reserved for system/housekeeping
+housekeeping_cores = [6, 7, 8, 9, 10, 11]
+
+[memory]
+# Pre-allocated memory pools to avoid runtime allocation
+# Order book update pool (zero-copy)
+order_book_pool_size_mb = 512
+# Tick data ring buffer
+tick_data_pool_size_mb = 1024
+# Event message pool
+event_message_pool_size_mb = 256
+# State snapshot buffer
+state_snapshot_pool_size_mb = 128
+
+[network]
+# WebSocket buffer sizes optimized for Binance/Coinbase
+# Receive buffer (optimized for tick bursts)
+websocket_recv_buffer_kb = 2048
+# Send buffer (optimized for order bursts)
+websocket_send_buffer_kb = 512
+# TCP no-delay for minimal latency
+tcp_nodelay = true
+# Socket timeout in milliseconds
+socket_timeout_ms = 100
+
+[trading]
+# Exchange configurations
+[trading.binance]
+ws_url = "wss://stream.binance.com:9443/ws"
+rest_url = "https://api.binance.com"
+max_connections = 4
+reconnect_delay_ms = 50
+
+[trading.coinbase]
+ws_url = "wss://ws-feed.exchange.coinbase.com"
+rest_url = "https://api.exchange.coinbase.com"
+max_connections = 2
+reconnect_delay_ms = 50
+
+[logging]
+# Zero-copy async logging configuration
+log_level = "info"
+log_format = "json"
+# Memory-mapped log file
+mmap_log_path = "/var/log/trading_bot/events.log"
+mmap_log_size_mb = 256
+# Flush interval in milliseconds
+flush_interval_ms = 100
+
+[database]
+# DuckDB hybrid storage configuration
+duckdb_memory_limit_mb = 2048
+duckdb_temp_dir = "/tmp/duckdb_trading"
+# Eviction policy when memory pressure detected
+eviction_policy = "lru"
+eviction_threshold_mb = 1800
+
+[redis]
+# Low-memory Redis configuration
+host = "127.0.0.1"
+port = 6379
+maxmemory_mb = 512
+maxmemory_policy = "allkeys-lru"
+# Use listpack encoding for compact storage
+hash_max_listpack_entries = 512
+hash_max_listpack_value = 64
+list_max_listpack_entries = 256
+list_max_listpack_value = 64
+
+[ray]
+# Ray configuration for ML tasks (non-critical, pausable)
+num_cpus = 4
+object_store_memory_mb = 1024
+# Allow pausing during memory pressure
+allow_pause_on_pressure = true
