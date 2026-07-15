@@ -1,34 +1,32 @@
 ```
-# Dependencies
-target/
-**/target/
-
-# Python
-__pycache__/
+# Compiled and build artifacts
 *.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
+__pycache__/
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.a
+*.out
+# Dependencies
 .venv/
+venv/
+node_modules/
+target/
+.mypy_cache/
+.pytest_cache/
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+# Environment
 .env
 .env.local
 *.env.*
-
-# Rust
+# Editors
+.vscode/
+.idea/
+# Rust specific
 Cargo.lock
-**/*.rs.bk
-
-# Logs
-*.log
-
-# Temporary files
-*.tmp
-*.temp
-*~
-
-# OS generated files
-.DS_Store
-Thumbs.db
 ```
