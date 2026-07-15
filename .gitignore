@@ -4,30 +4,33 @@
 __pycache__/
 *.o
 *.obj
-*.so
-*.dylib
+*.exe
 *.dll
-target/
-dist/
-build/
-
+*.so
+*.a
+*.out
 # Dependencies
 .venv/
 venv/
-.env
-.env.local
-*.env.*
-
+node_modules/
+target/
 # Logs and temp files
 *.log
 *.tmp
 *.swp
-
+# Environment
+.env
+.env.local
+.env.*
 # Editors
 .vscode/
 .idea/
-
+# Rust specific
+Cargo.lock
+target/
+**/*.rs.bk
 # Python specific
+__pycache__/
 *.py[cod]
 *$py.class
 *.so
@@ -47,24 +50,4 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-
-# Rust specific
-Cargo.lock
-
-# Coverage reports
-.coverage
-htmlcov/
-coverage/
-
-# MyPy cache
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pytest cache
-.pytest_cache/
-
-# OS generated files
-.DS_Store
-Thumbs.db
 ```
