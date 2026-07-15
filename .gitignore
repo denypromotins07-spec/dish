@@ -9,24 +9,35 @@ __pycache__/
 *.so
 *.a
 *.out
+target/
+
 # Dependencies
 .venv/
 venv/
 node_modules/
-target/
 .mypy_cache/
 .pytest_cache/
+
 # Logs and temp files
 *.log
 *.tmp
 *.swp
+
 # Environment
 .env
 .env.local
 *.env.*
+
 # Editors
 .vscode/
 .idea/
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
 # Rust specific
 Cargo.lock
+*.rs.bk
 ```
