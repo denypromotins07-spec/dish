@@ -1,31 +1,32 @@
 ```
-# Compiled and build artifacts
-*.pyc
-__pycache__/
-*.o
-*.obj
-*.so
-*.dll
-*.exe
-*.class
-*.out
-
 # Dependencies
 .venv/
 venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 node_modules/
+
+# Build artifacts
 target/
-.mypy_cache/
+dist/
+build/
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Python specific
+*.pyc
+__pycache__/
 .pytest_cache/
+.mypy_cache/
 .coverage
-coverage/
 htmlcov/
 
-# Logs and temp files
+# Logs
 *.log
-*.tmp
-*.swp
-*.swo
 
 # Environment
 .env
@@ -35,21 +36,30 @@ htmlcov/
 # Editors
 .vscode/
 .idea/
+*.swp
+*.swo
 
-# Rust/Cargo specific
-Cargo.lock
-Cargo.toml.orig
-Cargo.toml.backup
-*.d
-*.rlib
-*.so
-*.dylib
-*.dll
+# System
+.DS_Store
+Thumbs.db
 
-# Python build artifacts
-*.pyo
-*.pyd
-*.egg-info/
-build/
-dist/
+# Compressed files
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
 ```
