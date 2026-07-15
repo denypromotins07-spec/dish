@@ -4,54 +4,55 @@
 __pycache__/
 *.o
 *.obj
-*.so
-*.dylib
-*.dll
 *.exe
-*.class
+*.dll
+*.so
+*.a
 *.out
-
 # Dependencies
 .venv/
 venv/
-env/
-.env
-.env.local
-.env.*
 node_modules/
-julia-*/
-zig*/
 target/
-.gradle/
 .mypy_cache/
 .pytest_cache/
-.coverage
-coverage/
-htmlcov/
-
-# Build directories
-dist/
-build/
-out/
-tmp/
-temp/
-
-# Editors
-.vscode/
-.idea/
-*.swp
-*.swo
-
 # Logs and temp files
 *.log
 *.tmp
-*.temp
-
-# System files
-.DS_Store
-Thumbs.db
-
-# Rust/Cargo specific
+*.swp
+# Environment
+.env
+.env.local
+.env.*
+# Editors
+.vscode/
+.idea/
+# Coverage
+coverage/
+htmlcov/
+.coverage
+# Rust specific
 Cargo.lock
-**/target/
+*.rs.bk
+# Python specific
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 ```
