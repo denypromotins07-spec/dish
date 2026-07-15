@@ -1,50 +1,53 @@
 ```
-# Dependencies
-target/
-**/target/
-
-# Python
-__pycache__/
+# Compiled and build artifacts
 *.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
+__pycache__/
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.a
+*.out
+# Dependencies
 .venv/
-.ENV
-.env
-.env.*
-.env.local
-requirements.txt.bak
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
+venv/
+node_modules/
+target/
+# Logs and temp files
 *.log
 *.tmp
 *.swp
-.DS_Store
-Thumbs.db
-
-# Rust
-Cargo.lock
-**/*.rs.bk
-**/rust-toolchain.toml
-**/rust-toolchain
-
-# IDE
+# Environment
+.env
+.env.local
+.env.*
+# Editors
 .vscode/
 .idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
+# Rust specific
+Cargo.lock
+target/
+**/*.rs.bk
+# Python specific
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 ```
