@@ -14,16 +14,19 @@ venv/
 .venv/
 .env
 .env.local
-.env.*
-requirements.txt.bak
+*.env.*
 
-# Rust/Cargo
+# Rust
 Cargo.lock
-**/Cargo.lock
 **/*.rs.bk
 
 # Logs
 *.log
+
+# Temporary files
+*.tmp
+*.temp
+*~
 
 # OS generated files
 .DS_Store
