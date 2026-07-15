@@ -1,4 +1,4 @@
-```gitignore
+```
 # Dependencies
 node_modules/
 
@@ -17,60 +17,46 @@ env/
 venv/
 .venv/
 .ENV
-.env
-.env.local
-.env.*
-.pytest_cache/
-.mypy_cache/
+.ENV.*
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
 .coverage
-coverage/
-htmlcov/
-
-# Logs
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
 *.log
-
-# OS generated files
+*.tmp
+*.swp
+*~
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
 
-# Editor files
+# IDE
 .vscode/
 .idea/
-*.swp
-*.swo
-*.tmp
 
-# Environment variables
+# Environment
 .env
 .env.local
 .env.*
+!.env.example
 
-# Compressed files
-*.zip
-*.gz
-*.tar
-*.tgz
-*.bz2
-*.xz
-*.7z
-*.rar
-*.zst
-*.lz4
-*.lzh
-*.cab
-*.arj
-*.rpm
-*.deb
-*.Z
-*.lz
-*.lzo
-*.tar.gz
-*.tar.bz2
-*.tar.xz
-*.tar.zst
+# Testing
+.pytest_cache/
+.mypy_cache/
+.hypothesis/
+
+# Distribution / packaging
+.Python
+env/
+venv/
+.venv/
+ENV
+env.bak
+venv.bak
+.venv.bak
+.python-version
 ```
