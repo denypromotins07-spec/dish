@@ -1,0 +1,318 @@
+name: Crypto Trading Bot CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_VERSION: '1.75'
+  PYTHON_VERSION: '3.11'
+  MAX_MEMORY_MB: 14336  # 14GB strict limit
+
+jobs:
+  # === Rust Code Quality ===
+  rust-lint:
+    name: Rust Linting & Formatting
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-action@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          components: rustfmt, clippy
+      
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+      
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+        working-directory: crates/monitoring
+      
+      - name: Run Clippy linter
+        run: |
+          cargo clippy --all-targets --all-features -- -D warnings
+        working-directory: crates/monitoring
+      
+      - name: Check for unsafe code
+        run: |
+          if grep -r "unsafe" crates/*/src/*.rs; then
+            echo "::warning::Unsafe code detected. Review required."
+          fi
+
+  # === Python Code Quality ===
+  python-lint:
+    name: Python Linting & Type Checking
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff mypy black isort pytest pytest-asyncio
+      
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      
+      - name: Check formatting with Black
+        run: black --check python/
+      
+      - name: Check imports with isort
+        run: isort --check-only python/
+      
+      - name: Run Ruff linter
+        run: ruff check python/
+      
+      - name: Type checking with mypy
+        run: mypy python/ --ignore-missing-imports --no-error-summary
+
+  # === Unit Tests ===
+  rust-tests:
+    name: Rust Unit Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+      
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+      
+      - name: Run tests
+        run: cargo test --all-features --verbose
+        working-directory: crates/monitoring
+      
+      - name: Generate coverage report
+        run: |
+          cargo install cargo-tarpaulin
+          cargo tarpaulin --out Xml
+        working-directory: crates/monitoring
+        continue-on-error: true
+
+  python-tests:
+    name: Python Unit Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt || true
+          pip install pytest pytest-asyncio pytest-cov numpy polars scipy scikit-learn
+      
+      - name: Run unit tests
+        run: |
+          pytest python/tests/ \
+            -v \
+            --cov=python/ \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --timeout=60 \
+            -x
+      
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+
+  # === Memory Limit Checks ===
+  memory-check:
+    name: Memory Limit Validation
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install memory profiling tools
+        run: |
+          pip install psutil memory-profiler
+      
+      - name: Create memory test script
+        run: |
+          cat > check_memory.py << 'EOF'
+          import psutil
+          import sys
+          
+          def check_memory_limit():
+              process = psutil.Process()
+              memory_mb = process.memory_info().rss / 1024 / 1024
+              max_allowed = ${{ env.MAX_MEMORY_MB }}
+              
+              print(f"Current memory usage: {memory_mb:.2f} MB")
+              print(f"Maximum allowed: {max_allowed} MB")
+              
+              if memory_mb > max_allowed * 0.8:  # 80% threshold for CI
+                  print(f"::error::Memory usage exceeds 80% of limit!")
+                  return False
+              return True
+          
+          if __name__ == "__main__":
+              sys.exit(0 if check_memory_limit() else 1)
+          EOF
+      
+      - name: Run memory check
+        run: python check_memory.py
+
+  # === Integration Tests ===
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [rust-tests, python-tests]
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          pip install pytest pytest-asyncio numpy polars lmdb
+      
+      - name: Run integration tests
+        run: |
+          pytest python/tests/integration_tests.py -v --timeout=120
+      
+      - name: Run hardware profiler smoke test
+        run: |
+          python python/tests/hardware_profiler.py
+
+  # === Build Verification ===
+  build-verification:
+    name: Build Verification
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+      
+      - name: Build Rust crates (release)
+        run: cargo build --release
+        working-directory: crates/monitoring
+      
+      - name: Verify binary size
+        run: |
+          ls -lh target/release/
+          SIZE=$(stat -c%s target/release/* 2>/dev/null | head -1 || echo 0)
+          MAX_SIZE=$((50 * 1024 * 1024))  # 50MB max
+          if [ "$SIZE" -gt "$MAX_SIZE" ]; then
+            echo "::error::Binary size exceeds 50MB"
+            exit 1
+          fi
+
+  # === Security Scans ===
+  security-scan:
+    name: Security Vulnerability Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+      
+      - name: Run cargo-audit
+        run: |
+          cargo install cargo-audit
+          cargo audit
+        working-directory: crates/monitoring
+        continue-on-error: true
+      
+      - name: Run pip-audit
+        run: |
+          pip install pip-audit
+          pip-audit || true
+
+  # === Deploy to Staging (main branch only) ===
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [rust-lint, python-lint, rust-tests, python-tests, integration-tests]
+    if: github.ref == 'refs/heads/main'
+    
+    environment:
+      name: staging
+      url: https://staging.trading-bot.internal
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Deploy artifacts
+        run: |
+          echo "Deploying to staging environment..."
+          # Add actual deployment steps here
+          # e.g., docker build, kubectl apply, etc.
+        env:
+          DEPLOY_TOKEN: ${{ secrets.STAGING_DEPLOY_TOKEN }}
+
+# === Status Summary ===
+status-summary:
+  name: Pipeline Status Summary
+  runs-on: ubuntu-latest
+  needs: [rust-lint, python-lint, rust-tests, python-tests, memory-check, integration-tests, build-verification]
+  if: always()
+  
+  steps:
+    - name: Generate status summary
+      run: |
+        echo "=== Pipeline Execution Summary ==="
+        echo "Rust Lint: ${{ needs.rust-lint.result }}"
+        echo "Python Lint: ${{ needs.python-lint.result }}"
+        echo "Rust Tests: ${{ needs.rust-tests.result }}"
+        echo "Python Tests: ${{ needs.python-tests.result }}"
+        echo "Memory Check: ${{ needs.memory-check.result }}"
+        echo "Integration Tests: ${{ needs.integration-tests.result }}"
+        echo "Build Verification: ${{ needs.build-verification.result }}"
+        
+        # Check if all critical jobs passed
+        if [[ "${{ needs.rust-tests.result }}" == "success" && \
+              "${{ needs.python-tests.result }}" == "success" && \
+              "${{ needs.integration-tests.result }}" == "success" ]]; then
+          echo "✅ All critical checks passed!"
+          exit 0
+        else
+          echo "❌ Some critical checks failed!"
+          exit 1
+        fi

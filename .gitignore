@@ -15,32 +15,17 @@ venv/
 .env
 .env.local
 .env.*
-.python-version
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.log
-.git/modules/
-.DS_Store
-Thumbs.db
+requirements.txt.bak
 
-# Rust
+# Rust/Cargo
 Cargo.lock
+**/Cargo.lock
+**/*.rs.bk
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*.tmp
+# Logs
+*.log
 
-# OS
+# OS generated files
 .DS_Store
 Thumbs.db
 ```
