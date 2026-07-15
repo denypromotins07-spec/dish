@@ -1,0 +1,155 @@
+# Stage 30: Master Docker Compose with strict memory limits
+# Target: AMD Ryzen AI 5, 16GB RAM total system cap (<14GB for containers)
+
+services:
+  # Rust Core Engine - Ultra low latency trading core
+  rust-core:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.rust
+    container_name: crypto_bot_rust
+    restart: unless-stopped
+    # Strict memory limit: 4GB max for Rust core
+    mem_limit: 4g
+    memswap_limit: 4g
+    # CPU pinning to performance cores (adjust based on AMD Ryzen AI 5 topology)
+    cpuset: "0-3"
+    cpu_shares: 512
+    # Shared memory for zero-copy IPC with Python
+    shm_size: '2gb'
+    environment:
+      - RUST_LOG=info
+      - RUST_MIN_STACK=2097152
+      - MALLOC_ARENA_MAX=2
+      - LMDB_PATH=/data/lmdb
+      - BACKEND_MODE=production
+    volumes:
+      - rust_data:/data
+      - /dev/shm:/dev/shm
+    networks:
+      - bot_internal
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # Python Ray/Nautilus Layer - Strategy & ML inference
+  python-strategy:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.python
+    container_name: crypto_bot_python
+    restart: unless-stopped
+    # Strict memory limit: 6GB max for Python/Ray
+    mem_limit: 6g
+    memswap_limit: 6g
+    # CPU pinning to efficiency cores
+    cpuset: "4-7"
+    cpu_shares: 256
+    # Share same shm for zero-copy IPC
+    shm_size: '2gb'
+    environment:
+      - PYTHONUNBUFFERED=1
+      - MALLOC_ARENA_MAX=2
+      - RAY_SCHEDULER_SPREAD_THRESHOLD=0.5
+      - REDIS_ADDRESS=redis://redis:6379
+    volumes:
+      - strategy_data:/data
+      - /dev/shm:/dev/shm
+    depends_on:
+      rust-core:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - bot_internal
+    healthcheck:
+      test: ["CMD", "python", "-c", "import ray; ray.init(address='localhost:6379')"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+  # Redis - Ultra-fast state cache (minimal footprint)
+  redis:
+    image: redis:7-alpine
+    container_name: crypto_bot_redis
+    restart: unless-stopped
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpuset: "8"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - bot_internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: "none"
+
+  # Frontend - Vite/React with Nginx reverse proxy
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: ../deployment/Dockerfile.frontend
+    container_name: crypto_bot_frontend
+    restart: unless-stopped
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpuset: "9"
+    ports:
+      - "443:443"  # HTTPS only
+      - "80:80"    # Redirect to HTTPS
+    environment:
+      - NGINX_HOST=localhost
+      - NGINX_PORT=443
+      - SSL_CERTIFICATE=/etc/nginx/certs/localhost.crt
+      - SSL_CERTIFICATE_KEY=/etc/nginx/certs/localhost.key
+    volumes:
+      - ./security/certs:/etc/nginx/certs:ro
+    depends_on:
+      rust-core:
+        condition: service_healthy
+    networks:
+      - bot_internal
+      - bot_external
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "2"
+
+networks:
+  bot_internal:
+    driver: bridge
+    internal: true  # No external access
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+  bot_external:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.29.0.0/16
+
+volumes:
+  rust_data:
+    driver: local
+  strategy_data:
+    driver: local
+  redis_data:
+    driver: local

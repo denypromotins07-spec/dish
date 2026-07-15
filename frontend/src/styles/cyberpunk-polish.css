@@ -1,0 +1,222 @@
+/* Stage 30: Chapter 4 - File 2 */
+/* Cyberpunk Polish Layer - Final UI Aesthetics */
+
+/* CRT Scanline Effect */
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+.crt-overlay::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.15) 0px,
+    rgba(0, 0, 0, 0.15) 1px,
+    transparent 1px,
+    transparent 2px
+  );
+  pointer-events: none;
+  z-index: 9999;
+  animation: scanline 8s linear infinite;
+  opacity: 0.03;
+}
+
+/* Neon Glow Effects */
+.neon-cyan {
+  text-shadow: 
+    0 0 5px #00ffff,
+    0 0 10px #00ffff,
+    0 0 20px #00ffff,
+    0 0 40px #008b8b;
+  box-shadow: 
+    0 0 5px #00ffff,
+    0 0 10px #00ffff,
+    inset 0 0 5px rgba(0, 255, 255, 0.1);
+}
+
+.neon-magenta {
+  text-shadow: 
+    0 0 5px #ff00ff,
+    0 0 10px #ff00ff,
+    0 0 20px #ff00ff,
+    0 0 40px #8b008b;
+  box-shadow: 
+    0 0 5px #ff00ff,
+    0 0 10px #ff00ff,
+    inset 0 0 5px rgba(255, 0, 255, 0.1);
+}
+
+.neon-green {
+  text-shadow: 
+    0 0 5px #00ff00,
+    0 0 10px #00ff00,
+    0 0 20px #00ff00,
+    0 0 40px #006400;
+  box-shadow: 
+    0 0 5px #00ff00,
+    0 0 10px #00ff00,
+    inset 0 0 5px rgba(0, 255, 0, 0.1);
+}
+
+/* Glassmorphism Utilities */
+.glass-panel {
+  background: rgba(10, 10, 15, 0.65);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.glass-panel-intense {
+  background: rgba(5, 5, 8, 0.85);
+  backdrop-filter: blur(20px) saturate(200%);
+  -webkit-backdrop-filter: blur(20px) saturate(200%);
+  border: 1px solid rgba(0, 255, 255, 0.15);
+  box-shadow: 
+    0 12px 48px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(0, 255, 255, 0.2),
+    0 0 20px rgba(0, 255, 255, 0.05);
+}
+
+/* Hardware Accelerated Transitions */
+.hw-accel {
+  transform: translateZ(0);
+  will-change: transform, opacity;
+  transition: 
+    transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.3s ease;
+}
+
+/* Pulse Animation for Status Indicators */
+@keyframes pulse-glow {
+  0%, 100% { 
+    opacity: 1;
+    box-shadow: 0 0 10px currentColor;
+  }
+  50% { 
+    opacity: 0.6;
+    box-shadow: 0 0 2px currentColor;
+  }
+}
+
+.pulse-active {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Flicker Effect for Cyberpunk Feel */
+@keyframes flicker {
+  0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% {
+    opacity: 1;
+  }
+  20%, 24%, 55% {
+    opacity: 0.4;
+  }
+}
+
+.flicker-slow {
+  animation: flicker 3s infinite;
+}
+
+.flicker-fast {
+  animation: flicker 0.8s infinite;
+}
+
+/* Gradient Borders */
+.gradient-border-cyan {
+  position: relative;
+  background: linear-gradient(#0a0a0f, #0a0a0f) padding-box,
+              linear-gradient(45deg, #00ffff, #008b8b, #00ffff) border-box;
+  border: 1px solid transparent;
+}
+
+.gradient-border-magenta {
+  position: relative;
+  background: linear-gradient(#0a0a0f, #0a0a0f) padding-box,
+              linear-gradient(45deg, #ff00ff, #8b008b, #ff00ff) border-box;
+  border: 1px solid transparent;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(5, 5, 8, 0.5);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #00ffff, #008b8b);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #00ffff, #00cdcd);
+}
+
+/* Text Selection */
+::selection {
+  background: rgba(0, 255, 255, 0.3);
+  color: #ffffff;
+}
+
+/* Focus Ring */
+.focus-neon:focus-visible {
+  outline: 2px solid #00ffff;
+  outline-offset: 2px;
+  box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
+}
+
+/* Data Flash Animation */
+@keyframes data-flash {
+  0% { background-color: transparent; }
+  50% { background-color: rgba(0, 255, 255, 0.2); }
+  100% { background-color: transparent; }
+}
+
+.data-flash {
+  animation: data-flash 0.3s ease-out;
+}
+
+@keyframes data-flash-red {
+  0% { background-color: transparent; }
+  50% { background-color: rgba(255, 0, 0, 0.2); }
+  100% { background-color: transparent; }
+}
+
+.data-flash-red {
+  animation: data-flash-red 0.3s ease-out;
+}
+
+/* Vignette Effect */
+.vignette {
+  position: relative;
+}
+
+.vignette::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 0%,
+    transparent 60%,
+    rgba(0, 0, 0, 0.4) 100%
+  );
+  pointer-events: none;
+  z-index: 9998;
+}

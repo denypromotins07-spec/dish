@@ -1,0 +1,73 @@
+# Stage 30: Optimized Python/Ray/Nautilus Dockerfile
+# Target: Slim image with aggressive cache clearing
+
+FROM python:3.11-slim-bookworm AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    git \
+    libssl-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv for fast dependency resolution
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+WORKDIR /app
+
+# Copy requirements first for layer caching
+COPY requirements.txt .
+
+# Install dependencies with uv (faster and more efficient than pip)
+RUN uv pip install --system --no-cache-dir -r requirements.txt
+
+# Copy source code
+COPY src ./src
+COPY nautilus_trader ./nautilus_trader
+
+# Pre-compile python bytecode
+RUN python -m compileall src nautilus_trader
+
+# Final runtime image
+FROM python:3.11-slim-bookworm
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libssl3 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean \
+    && rm -rf /var/cache/apt/archives/*
+
+# Create non-root user
+RUN groupadd -g 1000 botuser && useradd -u 1000 -g botuser -ms /bin/bash botuser
+
+WORKDIR /app
+
+# Copy installed packages and source from builder
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /app/src /app/src
+COPY --from=builder /app/nautilus_trader /app/nautilus_trader
+
+# Set strict memory limits for Python GC
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV MALLOC_ARENA_MAX=2
+ENV PYTHON_GC_DEBUG=0
+
+# Ray specific optimizations
+ENV RAY_DISABLE_IMPORT_WARNING=1
+ENV RAY_SCHEDULER_SPREAD_THRESHOLD=0.5
+
+# Switch to non-root user
+USER botuser
+
+# Expose Ray dashboard and worker ports (internal only)
+EXPOSE 8265 6379
+
+HEALTHCHECK --interval=15s --timeout=10s --start-period=30s --retries=3 \
+    CMD python -c "import ray; ray.init(address='localhost:6379', ignore_reinit_error=True)" || exit 1
+
+ENTRYPOINT ["python", "-u", "src/main.py"]
