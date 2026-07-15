@@ -1,32 +1,55 @@
 ```
 # Compiled and build artifacts
+*.pyc
+__pycache__/
 *.o
 *.obj
-*.exe
-*.dll
 *.so
-*.a
+*.dll
+*.exe
+*.class
 *.out
+
 # Dependencies
-**/target/
-Cargo.lock
+.venv/
+venv/
+node_modules/
+target/
+.mypy_cache/
+.pytest_cache/
+.coverage
+coverage/
+htmlcov/
+
 # Logs and temp files
 *.log
 *.tmp
+*.swp
+*.swo
+
 # Environment
 .env
 .env.local
-.env.*
+*.env.*
+
 # Editors
 .vscode/
 .idea/
-*.swp
-*.swo
-# Coverage
-coverage/
-htmlcov/
-.coverage
-# Rust specific
-**/Cargo.lock
-**/target/
+
+# Rust/Cargo specific
+Cargo.lock
+Cargo.toml.orig
+Cargo.toml.backup
+*.d
+*.rlib
+*.so
+*.dylib
+*.dll
+
+# Python build artifacts
+*.pyo
+*.pyd
+*.egg-info/
+build/
+dist/
 ```
