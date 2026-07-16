@@ -15,14 +15,18 @@ build/
 *.pyc
 *.o
 *.obj
+*.exe
+*.dll
+*.so
+*.a
 *.out
 
-# Environment
+# Environment files
 .env
 .env.local
 *.env.*
 
-# Editors
+# Editor/IDE files
 .vscode/
 .idea/
 *.swp
@@ -37,7 +41,7 @@ coverage/
 htmlcov/
 .coverage
 
-# OS
+# OS specific
 .DS_Store
 Thumbs.db
 ```
