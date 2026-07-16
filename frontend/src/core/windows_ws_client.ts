@@ -1,354 +1,421 @@
-// Chapter 5, File 2: Windows WebSocket Client for Frontend
-// frontend/src/core/windows_ws_client.ts
-// Optimized WebSocket client for Windows browsers with binary chunking
-
-import { useCallback, useEffect, useRef, useState } from 'react';
-
-// Binary message chunk size for Windows browser memory optimization
-const CHUNK_SIZE_BYTES = 16384; // 16KB chunks
-const MAX_BUFFER_SIZE = 10 * 1024 * 1024; // 10MB max buffer
-const RECONNECT_INTERVAL_MS = 100; // Aggressive reconnection for HFT
-const HEARTBEAT_INTERVAL_MS = 5000; // 5 second heartbeat
-
-interface MarketTick {
-  symbol: string;
-  price: number;
-  quantity: number;
-  timestamp: number;
-  side: 'buy' | 'sell';
-}
-
-interface WebSocketStats {
-  messagesReceived: number;
-  bytesReceived: number;
-  reconnects: number;
-  lastLatencyMs: number;
-  averageLatencyMs: number;
-}
-
 /**
- * High-performance WebSocket client optimized for Windows browsers (Edge/Chrome)
- * Implements binary chunking to bypass Windows browser memory limits
- * Utilizes hardware acceleration via requestAnimationFrame for canvas rendering
+ * =============================================================================
+ * WINDOWS WEBSOCKET CLIENT - OPTIMIZED FOR EDGE/CHROME ON WINDOWS 11
+ * Binary chunking to bypass browser memory limits, GPU-accelerated Canvas
+ * =============================================================================
  */
-export class WindowsWebSocketClient {
-  private ws: WebSocket | null = null;
-  private url: string;
-  private stats: WebSocketStats;
-  private reconnectAttempts: number = 0;
-  private heartbeatTimer: NodeJS.Timeout | null = null;
-  private messageBuffer: Uint8Array[] = [];
-  private totalBufferSize: number = 0;
-  private onTickCallback: ((tick: MarketTick) => void) | null = null;
-  private canvasRef: HTMLCanvasElement | null = null;
 
-  constructor(url: string) {
-    this.url = url;
-    this.stats = {
-      messagesReceived: 0,
-      bytesReceived: 0,
-      reconnects: 0,
-      lastLatencyMs: 0,
-      averageLatencyMs: 0,
-    };
+import { useEffect, useRef, useCallback, useState } from 'react';
+
+// =============================================================================
+// CONFIGURATION - WINDOWS-SPECIFIC OPTIMIZATIONS
+// =============================================================================
+const WS_CONFIG = {
+  url: import.meta.env.VITE_WS_URL || 'wss://localhost:8081',
+  reconnectInterval: 1000,
+  maxReconnectAttempts: 10,
+  // Windows browser memory optimization
+  binaryChunkSize: 65536, // 64KB chunks to avoid GC pressure
+  maxBufferLength: 1000,
+  // GPU acceleration hints for AMD Radeon
+  enableGPUAcceleration: true,
+};
+
+// =============================================================================
+// BINARY CHUNKING DECODER - BYPASSES WINDOWS BROWSER MEMORY LIMITS
+// =============================================================================
+class BinaryChunkDecoder {
+  private buffer: Uint8Array[] = [];
+  private expectedLength: number = 0;
+  private receivedLength: number = 0;
+
+  start(expectedLength: number): void {
+    this.expectedLength = expectedLength;
+    this.receivedLength = 0;
+    this.buffer = [];
   }
 
-  /**
-   * Connect to exchange WebSocket server with binary protocol
-   */
-  connect(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      try {
-        this.ws = new WebSocket(this.url, ['binary', 'hft-protocol']);
-        this.ws.binaryType = 'arraybuffer';
+  addChunk(chunk: ArrayBuffer): boolean {
+    const uint8 = new Uint8Array(chunk);
+    this.buffer.push(uint8);
+    this.receivedLength += uint8.length;
 
-        this.ws.onopen = () => {
-          console.log('[WS] Connected to HFT server');
-          this.reconnectAttempts = 0;
-          this.startHeartbeat();
-          resolve();
-        };
-
-        this.ws.onmessage = (event) => {
-          this.handleMessage(event.data);
-        };
-
-        this.ws.onerror = (error) => {
-          console.error('[WS] Error:', error);
-          reject(error);
-        };
-
-        this.ws.onclose = () => {
-          console.log('[WS] Connection closed');
-          this.stopHeartbeat();
-          this.scheduleReconnect();
-        };
-      } catch (error) {
-        reject(error);
-      }
-    });
+    if (this.receivedLength >= this.expectedLength) {
+      return true; // Message complete
+    }
+    return false;
   }
 
-  /**
-   * Handle incoming binary messages with chunking
-   */
-  private handleMessage(data: ArrayBuffer | string): void {
-    const receiveTime = performance.now();
-
-    if (typeof data === 'string') {
-      // Text message (control/heartbeat)
-      this.processTextMessage(data);
-      return;
-    }
-
-    // Binary message - market tick data
-    const chunk = new Uint8Array(data);
-    this.stats.bytesReceived += chunk.byteLength;
-
-    // Add to buffer
-    this.messageBuffer.push(chunk);
-    this.totalBufferSize += chunk.byteLength;
-
-    // Enforce max buffer size
-    if (this.totalBufferSize > MAX_BUFFER_SIZE) {
-      this.flushOldestChunks();
-    }
-
-    // Process complete message
-    if (this.isCompleteMessage()) {
-      const tick = this.parseMarketTick();
-      if (tick) {
-        this.stats.messagesReceived++;
-        this.stats.lastLatencyMs = receiveTime - tick.timestamp;
-        this.updateAverageLatency();
-        
-        if (this.onTickCallback) {
-          this.onTickCallback(tick);
-        }
-      }
-    }
-  }
-
-  /**
-   * Parse binary data into MarketTick structure
-   */
-  private parseMarketTick(): MarketTick | null {
-    if (this.messageBuffer.length === 0) return null;
-
-    const combined = this.combineChunks();
-    const view = new DataView(combined.buffer);
-
-    try {
-      // Binary protocol format:
-      // [0-19]: symbol (20 bytes string)
-      // [20-27]: price (float64)
-      // [28-35]: quantity (float64)
-      // [36-43]: timestamp (int64)
-      // [44]: side (1 byte: 0=buy, 1=sell)
-
-      const symbolBytes = combined.slice(0, 20);
-      const symbol = new TextDecoder().decode(symbolBytes).replace(/\0/g, '');
-      const price = view.getFloat64(20, true); // Little-endian
-      const quantity = view.getFloat64(28, true);
-      const timestamp = Number(view.getBigInt64(36, true));
-      const side = view.getUint8(44) === 0 ? 'buy' : 'sell';
-
-      return { symbol, price, quantity, timestamp, side };
-    } catch (error) {
-      console.error('[WS] Failed to parse market tick:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Combine buffered chunks into single Uint8Array
-   */
-  private combineChunks(): Uint8Array {
-    const totalLength = this.messageBuffer.reduce((acc, chunk) => acc + chunk.length, 0);
-    const combined = new Uint8Array(totalLength);
+  decode(): Uint8Array {
+    const result = new Uint8Array(this.receivedLength);
     let offset = 0;
 
-    for (const chunk of this.messageBuffer) {
-      combined.set(chunk, offset);
+    for (const chunk of this.buffer) {
+      result.set(chunk, offset);
       offset += chunk.length;
     }
 
-    return combined;
+    return result;
   }
 
-  /**
-   * Check if we have a complete message
-   */
-  private isCompleteMessage(): boolean {
-    // Minimum message size is 45 bytes (see parseMarketTick)
-    return this.totalBufferSize >= 45;
-  }
-
-  /**
-   * Flush oldest chunks when buffer exceeds limit
-   */
-  private flushOldestChunks(): void {
-    while (this.totalBufferSize > MAX_BUFFER_SIZE && this.messageBuffer.length > 0) {
-      const oldest = this.messageBuffer.shift();
-      if (oldest) {
-        this.totalBufferSize -= oldest.length;
-      }
-    }
-  }
-
-  /**
-   * Clear message buffer after processing
-   */
-  private clearBuffer(): void {
-    this.messageBuffer = [];
-    this.totalBufferSize = 0;
-  }
-
-  /**
-   * Process text control messages
-   */
-  private processTextMessage(text: string): void {
-    const msg = JSON.parse(text);
-    
-    if (msg.type === 'heartbeat') {
-      // Heartbeat response - calculate latency
-      const latency = performance.now() - msg.timestamp;
-      this.stats.lastLatencyMs = latency;
-    }
-  }
-
-  /**
-   * Start heartbeat timer
-   */
-  private startHeartbeat(): void {
-    this.heartbeatTimer = setInterval(() => {
-      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        this.ws.send(JSON.stringify({
-          type: 'heartbeat',
-          timestamp: performance.now(),
-        }));
-      }
-    }, HEARTBEAT_INTERVAL_MS);
-  }
-
-  /**
-   * Stop heartbeat timer
-   */
-  private stopHeartbeat(): void {
-    if (this.heartbeatTimer) {
-      clearInterval(this.heartbeatTimer);
-      this.heartbeatTimer = null;
-    }
-  }
-
-  /**
-   * Schedule reconnection with exponential backoff
-   */
-  private scheduleReconnect(): void {
-    const delay = Math.min(
-      RECONNECT_INTERVAL_MS * Math.pow(2, this.reconnectAttempts),
-      30000 // Max 30 seconds
-    );
-
-    console.log(`[WS] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts + 1})`);
-
-    setTimeout(() => {
-      this.reconnectAttempts++;
-      this.stats.reconnects++;
-      this.connect().catch(console.error);
-    }, delay);
-  }
-
-  /**
-   * Update average latency calculation
-   */
-  private updateAverageLatency(): void {
-    const alpha = 0.1; // Exponential moving average factor
-    this.stats.averageLatencyMs =
-      alpha * this.stats.lastLatencyMs +
-      (1 - alpha) * this.stats.averageLatencyMs;
-  }
-
-  /**
-   * Set callback for market tick events
-   */
-  onTick(callback: (tick: MarketTick) => void): void {
-    this.onTickCallback = callback;
-  }
-
-  /**
-   * Get current statistics
-   */
-  getStats(): WebSocketStats {
-    return { ...this.stats };
-  }
-
-  /**
-   * Disconnect from server
-   */
-  disconnect(): void {
-    this.stopHeartbeat();
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
-    }
-  }
-
-  /**
-   * Attach canvas for hardware-accelerated rendering
-   */
-  attachCanvas(canvas: HTMLCanvasElement): void {
-    this.canvasRef = canvas;
-    // Enable hardware acceleration hints for Windows browsers
-    const context = canvas.getContext('2d', {
-      alpha: false, // Optimize for opaque canvas
-      desynchronized: true, // Reduce latency for real-time rendering
-    });
-    
-    if (context) {
-      // Force GPU acceleration on Windows
-      (context as CanvasRenderingContext2D).imageSmoothingEnabled = false;
-    }
+  reset(): void {
+    this.buffer = [];
+    this.expectedLength = 0;
+    this.receivedLength = 0;
   }
 }
 
-/**
- * React hook for using the WebSocket client
- */
-export function useHFTWebSocket(url: string) {
-  const clientRef = useRef<WindowsWebSocketClient | null>(null);
-  const [connected, setConnected] = useState(false);
-  const [stats, setStats] = useState<WebSocketStats | null>(null);
-  const [latestTick, setLatestTick] = useState<MarketTick | null>(null);
+// =============================================================================
+// WEBSOCKET HOOK - WINDOWS-OPTIMIZED CONNECTION MANAGEMENT
+// =============================================================================
+export function useWindowsWebSocket(
+  onMessage: (data: any) => void,
+  onError?: (error: Error) => void
+) {
+  const wsRef = useRef<WebSocket | null>(null);
+  const decoderRef = useRef<BinaryChunkDecoder>(new BinaryChunkDecoder());
+  const reconnectCountRef = useRef(0);
+  const [isConnected, setIsConnected] = useState(false);
+  const [latency, setLatency] = useState<number>(0);
 
-  useEffect(() => {
-    const client = new WindowsWebSocketClient(url);
-    clientRef.current = client;
+  const connect = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      return;
+    }
 
-    client.onTick((tick) => {
-      setLatestTick(tick);
-      setStats(client.getStats());
-    });
+    console.log('[WS] Connecting to:', WS_CONFIG.url);
 
-    client.connect()
-      .then(() => setConnected(true))
-      .catch((err) => console.error('Connection failed:', err));
+    try {
+      // Enable binaryType for efficient ArrayBuffer handling
+      wsRef.current = new WebSocket(WS_CONFIG.url);
+      wsRef.current.binaryType = 'arraybuffer';
 
-    return () => {
-      client.disconnect();
-      setConnected(false);
-    };
-  }, [url]);
+      const connectTime = performance.now();
 
-  const sendOrder = useCallback((order: { symbol: string; quantity: number; side: string }) => {
-    if (clientRef.current) {
-      // Send order via WebSocket
-      const message = JSON.stringify({ type: 'order', ...order });
-      clientRef.current['ws']?.send(message);
+      wsRef.current.onopen = () => {
+        console.log('[WS] Connected');
+        setIsConnected(true);
+        reconnectCountRef.current = 0;
+        setLatency(performance.now() - connectTime);
+      };
+
+      wsRef.current.onclose = (event) => {
+        console.log('[WS] Closed:', event.code, event.reason);
+        setIsConnected(false);
+
+        // Auto-reconnect with exponential backoff
+        if (reconnectCountRef.current < WS_CONFIG.maxReconnectAttempts) {
+          const delay = WS_CONFIG.reconnectInterval * Math.pow(2, reconnectCountRef.current);
+          console.log(`[WS] Reconnecting in ${delay}ms...`);
+          reconnectCountRef.current++;
+          setTimeout(connect, delay);
+        } else {
+          onError?.(new Error('Max reconnection attempts reached'));
+        }
+      };
+
+      wsRef.current.onerror = (error) => {
+        console.error('[WS] Error:', error);
+        onError?.(new Error('WebSocket connection error'));
+      };
+
+      wsRef.current.onmessage = (event) => {
+        const receiveTime = performance.now();
+
+        if (event.data instanceof ArrayBuffer) {
+          // Handle binary chunked messages
+          handleBinaryMessage(event.data, onMessage);
+        } else {
+          // Handle JSON text messages
+          try {
+            const data = JSON.parse(event.data);
+            data._receiveTime = receiveTime;
+            onMessage(data);
+          } catch (e) {
+            console.error('[WS] Failed to parse JSON:', e);
+          }
+        }
+      };
+    } catch (error) {
+      console.error('[WS] Connection failed:', error);
+      onError?.(error as Error);
+    }
+  }, [onMessage, onError]);
+
+  const handleBinaryMessage = useCallback(
+    (data: ArrayBuffer, callback: (data: any) => void) => {
+      const view = new DataView(data);
+      
+      // Protocol: First 4 bytes = total message length
+      if (view.byteLength >= 4) {
+        const totalLength = view.getUint32(0, false); // Big-endian
+        
+        if (decoderRef.current.expectedLength === 0) {
+          // Start new message
+          decoderRef.current.start(totalLength);
+        }
+        
+        // Add chunk (skip length header if it's the first chunk)
+        const chunk = decoderRef.current.expectedLength === 0 
+          ? data.slice(4) 
+          : data;
+        
+        const isComplete = decoderRef.current.addChunk(chunk);
+        
+        if (isComplete) {
+          try {
+            const decoded = decoderRef.current.decode();
+            const jsonStr = new TextDecoder().decode(decoded);
+            const parsed = JSON.parse(jsonStr);
+            parsed._receiveTime = performance.now();
+            parsed._isBinary = true;
+            callback(parsed);
+          } catch (e) {
+            console.error('[WS] Binary decode failed:', e);
+          }
+          decoderRef.current.reset();
+        }
+      }
+    },
+    []
+  );
+
+  const sendMessage = useCallback((data: any) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(data));
+    } else {
+      console.warn('[WS] Cannot send - not connected');
     }
   }, []);
 
-  return { connected, stats, latestTick, sendOrder };
+  const disconnect = useCallback(() => {
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+      setIsConnected(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    connect();
+    return () => disconnect();
+  }, [connect, disconnect]);
+
+  return { isConnected, latency, sendMessage, disconnect, reconnect: connect };
 }
 
-export default WindowsWebSocketClient;
+// =============================================================================
+// GPU-ACCELERATED CANVAS RENDERER - AMD RADEON OPTIMIZED
+// =============================================================================
+export class TradingCanvasRenderer {
+  private canvas: HTMLCanvasElement;
+  private ctx: CanvasRenderingContext2D | null;
+  private animationFrameId: number | null = null;
+  private dataQueue: any[] = [];
+  private maxDisplayItems = 100;
+
+  constructor(canvasId: string) {
+    this.canvas = document.getElementById(canvasId) as HTMLCanvasElement;
+    
+    // Enable hardware acceleration hints for Windows browsers
+    this.canvas.style.willChange = 'transform';
+    this.canvas.style.transform = 'translateZ(0)';
+    
+    // Force GPU compositing in Edge/Chrome
+    Object.assign(this.canvas.style, {
+      contain: 'layout paint',
+      contentVisibility: 'visible',
+    });
+
+    this.ctx = this.canvas.getContext('2d', {
+      alpha: false, // Optimize for opaque background
+      desynchronized: true, // Reduce latency for real-time rendering
+    });
+
+    this.resize();
+    window.addEventListener('resize', () => this.resize());
+  }
+
+  private resize(): void {
+    const dpr = window.devicePixelRatio || 1;
+    const rect = this.canvas.getBoundingClientRect();
+    
+    this.canvas.width = rect.width * dpr;
+    this.canvas.height = rect.height * dpr;
+    
+    if (this.ctx) {
+      this.ctx.scale(dpr, dpr);
+    }
+  }
+
+  public pushData(data: any): void {
+    this.dataQueue.push(data);
+    
+    // Trim queue to prevent memory buildup
+    if (this.dataQueue.length > this.maxDisplayItems) {
+      this.dataQueue.shift();
+    }
+
+    // Request render on next frame
+    if (this.animationFrameId === null) {
+      this.animationFrameId = requestAnimationFrame(() => this.render());
+    }
+  }
+
+  private render(): void {
+    if (!this.ctx || this.dataQueue.length === 0) {
+      this.animationFrameId = null;
+      return;
+    }
+
+    const width = this.canvas.width / (window.devicePixelRatio || 1);
+    const height = this.canvas.height / (window.devicePixelRatio || 1);
+
+    // Clear with optimized fill
+    this.ctx.fillStyle = '#0a0a0f';
+    this.ctx.fillRect(0, 0, width, height);
+
+    // Draw order book depth visualization
+    this.drawOrderBook(width, height);
+
+    // Draw recent trades
+    this.drawTrades(width, height);
+
+    // Draw latency heatmap
+    this.drawLatencyHeatmap(width, height);
+
+    this.animationFrameId = null;
+    
+    // Continue animation if there's more data
+    if (this.dataQueue.length > 0) {
+      this.animationFrameId = requestAnimationFrame(() => this.render());
+    }
+  }
+
+  private drawOrderBook(width: number, height: number): void {
+    const latest = this.dataQueue[this.dataQueue.length - 1];
+    if (!latest?.orderbook) return;
+
+    const { bids, asks } = latest.orderbook;
+    const barHeight = height / 4;
+    const centerY = height / 2;
+
+    // Draw bids (green, bottom)
+    if (bids?.length) {
+      const maxBid = Math.max(...bids.map((b: any) => b.size));
+      
+      bids.forEach((bid: any, i: number) => {
+        const barWidth = (bid.size / maxBid) * (width * 0.4);
+        const y = centerY + (i / bids.length) * barHeight;
+        
+        this.ctx.fillStyle = `rgba(0, 255, 100, ${1 - i / bids.length})`;
+        this.ctx.fillRect(0, y, barWidth, barHeight / bids.length - 1);
+      });
+    }
+
+    // Draw asks (red, top)
+    if (asks?.length) {
+      const maxAsk = Math.max(...asks.map((a: any) => a.size));
+      
+      asks.forEach((ask: any, i: number) => {
+        const barWidth = (ask.size / maxAsk) * (width * 0.4);
+        const y = centerY - ((i + 1) / asks.length) * barHeight;
+        
+        this.ctx.fillStyle = `rgba(255, 50, 50, ${1 - i / asks.length})`;
+        this.ctx.fillRect(width - barWidth, y, barWidth, barHeight / asks.length - 1);
+      });
+    }
+  }
+
+  private drawTrades(width: number, height: number): void {
+    const trades = this.dataQueue
+      .filter(d => d.trade)
+      .slice(-50)
+      .map(d => d.trade);
+
+    if (!trades.length) return;
+
+    const dotRadius = 3;
+    const tradeWidth = width * 0.3;
+    const startX = width * 0.35;
+
+    trades.forEach((trade: any, i: number) => {
+      const x = startX + (i / trades.length) * tradeWidth;
+      const y = height / 2 + (trade.side === 'buy' ? -20 : 20);
+      
+      this.ctx.beginPath();
+      this.ctx.arc(x, y, dotRadius, 0, Math.PI * 2);
+      this.ctx.fillStyle = trade.side === 'buy' ? '#00ff66' : '#ff3333';
+      this.ctx.fill();
+    });
+  }
+
+  private drawLatencyHeatmap(width: number, height: number): void {
+    const latencies = this.dataQueue
+      .filter(d => d._receiveTime && d._sendTime)
+      .map(d => d._receiveTime - d._sendTime)
+      .slice(-100);
+
+    if (!latencies.length) return;
+
+    const maxLatency = Math.max(...latencies, 100);
+    const barHeight = 20;
+    const y = height - barHeight - 10;
+
+    latencies.forEach((lat: number, i: number) => {
+      const barWidth = (width * 0.9) / latencies.length;
+      const hue = 120 - (lat / maxLatency) * 120; // Green to Red
+      
+      this.ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
+      this.ctx.fillRect(i * barWidth, y, barWidth - 1, barHeight);
+    });
+
+    // Label
+    this.ctx.fillStyle = '#ffffff';
+    this.ctx.font = '12px Consolas, monospace';
+    this.ctx.fillText(`Latency: ${Math.round(latencies[latencies.length - 1])}ms`, 10, y - 5);
+  }
+
+  public destroy(): void {
+    if (this.animationFrameId !== null) {
+      cancelAnimationFrame(this.animationFrameId);
+    }
+  }
+}
+
+// =============================================================================
+// PERFORMANCE MONITOR - WINDOWS BROWSER METRICS
+// =============================================================================
+export function monitorBrowserPerformance() {
+  const metrics = {
+    memory: (performance as any).memory ? {
+      usedJSHeapSize: (performance as any).memory.usedJSHeapSize,
+      totalJSHeapSize: (performance as any).memory.totalJSHeapSize,
+    } : null,
+    fps: 0,
+    latency: [],
+  };
+
+  // Track FPS using requestAnimationFrame
+  let lastTime = performance.now();
+  let frames = 0;
+
+  const measureFPS = () => {
+    frames++;
+    const now = performance.now();
+    
+    if (now - lastTime >= 1000) {
+      metrics.fps = frames;
+      frames = 0;
+      lastTime = now;
+    }
+    
+    requestAnimationFrame(measureFPS);
+  };
+
+  measureFPS();
+
+  return metrics;
+}
+
+export default useWindowsWebSocket;

@@ -1,48 +1,28 @@
 ```
-# Dependencies
-node_modules/
-venv/
-.venv/
-__pycache__/
-.mypy_cache/
-.pytest_cache/
-target/
-.gradle/
+# Scripts and executables
+*.bat
+*.ps1
 
-# Build artifacts
-*.o
-*.obj
-*.exe
-*.dll
-*.so
-*.a
-*.out
-dist/
-build/
-coverage/
-htmlcov/
-*.pyc
-
-# Editors
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Logs and temp files
+# Logs and temporary files
 *.log
 *.tmp
 
-# Environment
+# Environment files
 .env
 .env.local
 *.env.*
 
-# System files
-.DS_Store
-Thumbs.db
+# Editors
+.vscode/
+.idea/
 
-# Rust specific
-Cargo.lock
-*.rs.bk
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+.venv/
+.env
 ```

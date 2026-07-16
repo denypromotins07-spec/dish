@@ -1,171 +1,162 @@
 @echo off
-REM Chapter 5, File 3: Native Windows HFT Launcher
-REM scripts/native_windows_launcher.bat
-REM Ultimate Windows launch sequence for native HFT bot (no Docker overhead)
+REM =============================================================================
+REM NATIVE WINDOWS LAUNCHER - ULTIMATE HFT BOOT SEQUENCE
+REM Executes PowerShell tuner, sets env vars, launches Rust core natively
+REM Bypasses Docker overhead for the hot path
+REM =============================================================================
 
 setlocal EnableDelayedExpansion
 
-echo ============================================
-echo   HFT Bot - Native Windows Launcher
-echo   AMD Ryzen AI Optimized Build
-echo ============================================
-echo.
+title HFT Trading Bot - Native Windows Launcher
 
-REM Check for administrator privileges
+REM Check for Administrator privileges
 net session >nul 2>&1
 if %errorLevel% neq 0 (
-    echo [WARNING] Not running as Administrator!
-    echo Some optimizations may not apply.
-    echo Right-click and select "Run as Administrator" for full functionality.
-    echo.
+    echo [INFO] Requesting Administrator privileges...
+    powershell -Command "Start-Process cmd.exe -ArgumentList '/c', '%~f0' -Verb RunAs"
+    exit /b
 )
 
-REM Set working directory
-cd /d "%~dp0.."
-set BOT_ROOT=%CD%
+echo =============================================================================
+echo  ULTRA-LOW-LATENCY CRYPTO TRADING BOT
+echo  NATIVE WINDOWS 11 LAUNCHER
+echo  AMD Ryzen AI 5 | 16GB RAM | 10GB Bot Hard-Cap
+echo =============================================================================
+echo.
 
-REM Environment variables for HFT optimization
-set RUST_LOG=info
-set RUST_BACKTRACE=0
-set TOKIO_WORKER_THREADS=4
-set RAYON_NUM_THREADS=4
+cd /d "%~dp0"
 
-REM Memory limits (enforced by Job Objects in Python side)
-set PYTHON_MEMORY_LIMIT_MB=4096
-set RUST_MEMORY_LIMIT_MB=6144
-
-REM Apply Windows PowerShell tuner if available
-echo [LAUNCHER] Applying Windows HFT optimizations...
-if exist "%BOT_ROOT%\scripts\windows_hft_tuner.ps1" (
-    powershell -ExecutionPolicy Bypass -NoProfile -Command "& '%BOT_ROOT%\scripts\windows_hft_tuner.ps1' -Apply"
-) else (
-    echo [WARNING] PowerShell tuner not found, skipping optimizations
+REM -----------------------------------------------------------------------------
+REM STEP 1: EXECUTE POWERSHELL SYSTEM TUNER
+REM -----------------------------------------------------------------------------
+echo [STEP 1/7] Executing Windows HFT system tuner...
+powershell -ExecutionPolicy Bypass -File "scripts\windows_hft_tuner.ps1" -Quiet
+if %errorLevel% neq 0 (
+    echo [WARN] System tuner encountered issues, continuing anyway...
 )
+echo.
 
-REM Check for Visual C++ Redistributable (required for Rust binaries)
-echo [LAUNCHER] Checking runtime dependencies...
-where vcruntime140.dll >nul 2>&1
-if errorlevel 1 (
-    echo [ERROR] Visual C++ Redistributable not found!
-    echo Please install from: https://aka.ms/vs/17/release/vc_redist.x64.exe
+REM -----------------------------------------------------------------------------
+REM STEP 2: DECRYPT ENVIRONMENT VARIABLES VIA DPAPI
+REM -----------------------------------------------------------------------------
+echo [STEP 2/7] Decrypting environment variables...
+for /f "delims=" %%i in ('powershell -ExecutionPolicy Bypass -File "scripts\secure_env_loader.ps1" -Action decrypt') do set TEMP_ENV_FILE=%%i
+if not defined TEMP_ENV_FILE (
+    echo [ERROR] Failed to decrypt environment
     pause
     exit /b 1
 )
-
-REM Build Rust core if not already built
-echo [LAUNCHER] Building Rust HFT core (MSVC optimized)...
-if not exist "%BOT_ROOT%\target\release\hft_bot.exe" (
-    echo [BUILD] Compiling release build with MSVC optimizations...
-    
-    REM Set MSVC optimization flags
-    set RUSTFLAGS=-C target-cpu=native -C opt-level=3 -C lto=fat -C codegen-units=1 -C panic=abort
-    
-    REM Build with x86_64-pc-windows-msvc target
-    cargo build --release --target x86_64-pc-windows-msvc
-    
-    if errorlevel 1 (
-        echo [ERROR] Rust build failed!
-        echo Ensure you have Visual Studio 2022 with C++ tools installed.
-        pause
-        exit /b 1
-    )
-    echo [BUILD] Build completed successfully.
-) else (
-    echo [LAUNCHER] Using existing binary at target\release\hft_bot.exe
-)
-
-REM Create logs directory
-if not exist "%BOT_ROOT%\logs" mkdir "%BOT_ROOT%\logs"
-
-REM Create data directories
-if not exist "%BOT_ROOT%\data\lmdb" mkdir "%BOT_ROOT%\data\lmdb"
-if not exist "%BOT_ROOT%\data\parquet" mkdir "%BOT_ROOT%\data\parquet"
-
-REM Apply Windows Defender exclusions (requires admin)
-echo [LAUNCHER] Configuring Windows Defender exclusions...
-if exist "%BOT_ROOT%\python\system\defender_excluder.py" (
-    python "%BOT_ROOT%\python\system\defender_excluder.py" 2>nul
-    if errorlevel 1 (
-        echo [WARNING] Could not apply Defender exclusions (run as Admin)
-    )
-)
-
-REM Start Rust HFT Core (native, no Docker)
+echo [INFO] Environment loaded
 echo.
-echo [LAUNCHER] Starting Rust HFT Core...
-echo ============================================
 
-start "HFT Rust Core" /B /REALTIME "%BOT_ROOT%\target\release\hft_bot.exe"
-set RUST_PID=$!
+REM -----------------------------------------------------------------------------
+REM STEP 3: APPLY WSL2 CONFIGURATION (IF DOCKER DESKTOP IS USED)
+REM -----------------------------------------------------------------------------
+echo [STEP 3/7] Configuring WSL2 limits...
+if exist "deployment\wslconfig_optimizer.ini" (
+    copy /Y "deployment\wslconfig_optimizer.ini" "%USERPROFILE%\.wslconfig" >nul 2>&1
+    echo [INFO] WSL2 configuration applied
+) else (
+    echo [INFO] WSL2 config not found, skipping
+)
+echo.
 
-REM Wait for Rust core to initialize
+REM -----------------------------------------------------------------------------
+REM STEP 4: PREFLIGHT DIAGNOSTICS
+REM -----------------------------------------------------------------------------
+echo [STEP 4/7] Running pre-flight diagnostics...
+powershell -ExecutionPolicy Bypass -File "scripts\preflight_diagnostics.ps1"
+if %errorLevel% neq 0 (
+    echo [ERROR] Pre-flight checks failed
+    call scripts\secure_env_loader.ps1 -Action cleanup -EnvFile "%TEMP_ENV_FILE%"
+    pause
+    exit /b 1
+)
+echo.
+
+REM -----------------------------------------------------------------------------
+REM STEP 5: CLEAR BLOCKED PORTS
+REM -----------------------------------------------------------------------------
+echo [STEP 5/7] Clearing blocked ports...
+powershell -ExecutionPolicy Bypass -File "scripts\port_clearer.ps1"
+echo.
+
+REM -----------------------------------------------------------------------------
+REM STEP 6: GENERATE SSL CERTIFICATES IF NEEDED
+REM -----------------------------------------------------------------------------
+echo [STEP 6/7] Checking SSL certificates...
+if not exist "certs\localhost.pem" (
+    mkdir certs 2>nul
+    powershell -ExecutionPolicy Bypass -File "scripts\ssl_cert_generator.ps1"
+) else (
+    echo [INFO] SSL certificates present
+)
+echo.
+
+REM -----------------------------------------------------------------------------
+REM STEP 7: VALIDATE API KEYS
+REM -----------------------------------------------------------------------------
+echo [STEP 7/7] Validating Binance API credentials...
+python scripts\env_validator.py
+if %errorLevel% neq 0 (
+    echo [ERROR] API validation failed
+    call scripts\secure_env_loader.ps1 -Action cleanup -EnvFile "%TEMP_ENV_FILE%"
+    pause
+    exit /b 1
+)
+echo.
+
+REM =============================================================================
+REM LAUNCH COMPONENTS
+REM =============================================================================
+echo =============================================================================
+echo  LAUNCHING COMPONENTS
+echo =============================================================================
+echo.
+
+REM Launch Rust Core with memory cap and real-time priority
+echo [LAUNCH] Starting Rust HFT Core (6GB cap, TIME_CRITICAL)...
+start "HFT Core" /REALTIME powershell -ExecutionPolicy Bypass -File "scripts\launch_core.ps1"
 timeout /t 2 /nobreak >nul
 
-REM Start Python Ray Workers (with Job Object memory limits)
-echo [LAUNCHER] Starting Python Analytics Workers...
-echo ============================================
+REM Launch Python/Ray workers with memory cap
+echo [LAUNCH] Starting Python Analytics Workers (4GB cap)...
+start "HFT Workers" /HIGH powershell -ExecutionPolicy Bypass -File "scripts\launch_workers.ps1"
+timeout /t 2 /nobreak >nul
 
-if exist "%BOT_ROOT%\python\system\windows_job_objects.py" (
-    start "Python Ray Workers" /B /HIGH ^
-        python -c "import sys; sys.path.insert(0, '%BOT_ROOT%/python'); from system.windows_job_objects import wrap_python_workers_in_job_object; wrap_python_workers_in_job_object()"
-)
-
-if exist "%BOT_ROOT%\python\main.py" (
-    start "Python Analytics" /B /HIGH ^
-        python "%BOT_ROOT%\python\main.py"
-)
-
-REM Start React Frontend (if available)
-echo [LAUNCHER] Starting Frontend Development Server...
-echo ============================================
-
-if exist "%BOT_ROOT%\frontend\package.json" (
-    cd "%BOT_ROOT%\frontend"
-    if exist "node_modules" (
-        start "HFT Frontend" /B npm run dev
-    ) else (
-        echo [INFO] Frontend node_modules not found. Run 'npm install' first.
-    )
-    cd "%BOT_ROOT%"
-)
-
-REM Display status
-echo.
-echo ============================================
-echo   HFT Bot Launch Sequence Complete
-echo ============================================
-echo.
-echo Components started:
-echo   [OK] Rust HFT Core (REALTIME priority)
-echo   [OK] Python Workers (HIGH priority, 4GB limit)
-echo   [OK] Frontend (if available)
-echo.
-echo Memory Allocation:
-echo   - Rust Core:     6GB max
-echo   - Python Workers: 4GB max (Job Object enforced)
-echo   - Windows OS:    6GB reserved
-echo   - Total System:  16GB
-echo.
-echo Monitoring:
-echo   - Logs: %BOT_ROOT%\logs\
-echo   - Data: %BOT_ROOT%\data\
-echo.
-echo To stop all components:
-echo   1. Close the terminal windows
-echo   2. Or run: taskkill /F /IM hft_bot.exe /IM python.exe /IM node.exe
-echo.
-echo Press any key to view running processes...
-pause >nul
-
-REM Show running HFT processes
-echo.
-echo Running HFT processes:
-tasklist | findstr /I "hft_bot python node"
+REM Launch React Frontend
+echo [LAUNCH] Starting React Frontend (2GB cap)...
+start "HFT UI" /NORMAL powershell -ExecutionPolicy Bypass -File "scripts\launch_ui.ps1"
 
 echo.
-echo ============================================
-echo Launcher finished. Keep this window open.
-echo ============================================
+echo =============================================================================
+echo  STARTUP COMPLETE
+echo =============================================================================
+echo  Services:
+echo    - Rust Core:     http://localhost:8080
+echo    - WebSocket:     ws://localhost:8081  (wss:// for secure)
+echo    - Frontend:      https://localhost:5173
+echo    - Ray Dashboard: http://localhost:8265
+echo.
+echo  Memory Allocation:
+echo    - Rust Core:     6GB (hard-capped via Job Object)
+echo    - Python Workers: 4GB (hard-capped via Job Object)
+echo    - Total Bot:     10GB
+echo    - Reserved for OS: 6GB
+echo.
+echo  To Shutdown:
+echo    - Double-click KILL.bat on Desktop
+echo    - Or run: .\KILL.bat
+echo.
+echo  Watchdog:
+echo    - Auto-recovery enabled via crash_recovery_watchdog.ps1
+echo =============================================================================
+echo.
 
-REM Keep launcher window open
-pause
+REM Open dashboard automatically
+start "" "https://localhost:5173"
+
+REM Start watchdog in background (optional)
+REM start /B powershell -ExecutionPolicy Bypass -File "scripts\crash_recovery_watchdog.ps1"
+
+exit /b 0
