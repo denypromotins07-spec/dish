@@ -27,8 +27,8 @@ class TradingEngine:
     """
     High-performance trading engine wrapper around NautilusTrader.
     
-    Integrates Rust event bus, enforces 14GB RAM limit, and manages
-    the lifecycle of the trading node.
+    Integrates Rust event bus, enforces 3GB RAM limit for Python process,
+    and manages the lifecycle of the trading node.
     """
     
     def __init__(self, config_path: Optional[str] = None):
@@ -51,11 +51,12 @@ class TradingEngine:
         # Configure asyncio loop for low-latency network I/O
         configure_asyncio_loop()
         
-        # Start memory watchdog (14GB hard limit, triggers GC at 13GB)
+        # Start memory watchdog (3GB hard limit for Python process, triggers GC at 2.7GB)
+        # This ensures Python/Nautilus stays within its allocated portion of the 10GB system limit
         self.memory_watchdog = MemoryWatchdog(
-            max_memory_gb=14.0,
-            gc_trigger_gb=13.0,
-            pause_non_critical_gb=12.5
+            max_memory_gb=3.0,  # Reduced from 14GB to strict 3GB for Python/Nautilus
+            gc_trigger_gb=2.7,  # Trigger GC at 90% of limit
+            pause_non_critical_gb=2.5  # Pause non-critical workers at 2.5GB
         )
         self.memory_watchdog.start()
         
