@@ -55,9 +55,12 @@ pub struct TradingEngine {
 impl TradingEngine {
     /// Create a new trading engine with the given configuration
     pub fn new(config: EngineConfig) -> Option<Self> {
-        // Calculate slab count based on configured pool sizes
+        // Calculate slab count based on configured pool sizes (reduced for 10GB limit)
         let slab_size = 4096;
         let order_book_slabs = (config.order_book_pool_size_mb * 1024 * 1024) / slab_size;
+        
+        // Ensure we don't exceed memory limits (max 512MB for order book pool)
+        let order_book_slabs = order_book_slabs.min(131072); // Cap at 512MB
         
         let pool_config = MemoryPoolConfig {
             slab_size,
@@ -275,7 +278,11 @@ fn strategy_loop(event_bus: Arc<EventBus>) {
 /// Get current timestamp in nanoseconds
 #[inline]
 fn get_timestamp_ns() -> u64 {
-    Instant::now().duration_since(Instant::now()).as_nanos() as u64
+    use std::time::SystemTime;
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos() as u64
 }
 
 fn main() {

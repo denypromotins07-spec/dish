@@ -48,20 +48,21 @@ class MemoryStats:
 
 class WindowsMemoryEnforcer:
     """
-    Windows-specific memory enforcer that keeps the entire system under 10GB RAM.
+    Windows-specific memory enforcer that keeps Python process under 3GB RAM
+    (contributing to the overall 10GB system limit).
     
     Features:
-    - Monitors system-wide RAM usage via psutil
+    - Monitors Python process RAM usage via psutil
     - Triggers aggressive GC at thresholds
     - Coordinates with DuckDB for SSD spilling
     - Manages Ray worker lifecycle
     """
     
-    # Memory thresholds in GB (strict 10GB limit)
-    THRESHOLD_WARNING_GB = 7.0
-    THRESHOLD_CRITICAL_GB = 8.5
-    THRESHOLD_EMERGENCY_GB = 9.5
-    MAX_TOTAL_RAM_GB = 10.0
+    # Memory thresholds in GB (strict 10GB system limit, Python portion is 3GB)
+    THRESHOLD_WARNING_GB = 2.0      # Warning at 2GB for Python process
+    THRESHOLD_CRITICAL_GB = 2.5     # Critical at 2.5GB
+    THRESHOLD_EMERGENCY_GB = 2.8    # Emergency at 2.8GB (before 3GB hard cap)
+    MAX_TOTAL_RAM_GB = 3.0          # Python process max (part of 10GB system total)
     
     def __init__(
         self,
@@ -87,20 +88,24 @@ class WindowsMemoryEnforcer:
         logger.info(f"Windows Memory Enforcer initialized (max {self.MAX_TOTAL_RAM_GB}GB)")
     
     def get_memory_stats(self) -> MemoryStats:
-        """Get current system memory statistics"""
+        """Get current Python process memory statistics"""
         mem = psutil.virtual_memory()
+        proc = self.current_process.memory_info()
+        
+        # Use process-specific memory for threshold calculations
+        proc_used_gb = proc.rss / (1024 ** 3)
         
         total_gb = mem.total / (1024 ** 3)
         available_gb = mem.available / (1024 ** 3)
-        used_gb = mem.used / (1024 ** 3)
-        percent_used = mem.percent
+        system_used_gb = mem.used / (1024 ** 3)
+        percent_used = (proc_used_gb / self.MAX_TOTAL_RAM_GB) * 100
         
-        # Determine state based on used memory
-        if used_gb >= self.THRESHOLD_EMERGENCY_GB:
+        # Determine state based on process memory (not system-wide)
+        if proc_used_gb >= self.THRESHOLD_EMERGENCY_GB:
             state = MemoryState.EMERGENCY
-        elif used_gb >= self.THRESHOLD_CRITICAL_GB:
+        elif proc_used_gb >= self.THRESHOLD_CRITICAL_GB:
             state = MemoryState.CRITICAL
-        elif used_gb >= self.THRESHOLD_WARNING_GB:
+        elif proc_used_gb >= self.THRESHOLD_WARNING_GB:
             state = MemoryState.WARNING
         else:
             state = MemoryState.NORMAL
@@ -108,7 +113,7 @@ class WindowsMemoryEnforcer:
         return MemoryStats(
             total_gb=total_gb,
             available_gb=available_gb,
-            used_gb=used_gb,
+            used_gb=proc_used_gb,  # Return process memory, not system
             percent_used=percent_used,
             state=state
         )

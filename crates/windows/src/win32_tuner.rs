@@ -166,8 +166,9 @@ pub unsafe fn lock_memory_region(ptr: *mut c_void, size: usize) -> io::Result<()
 /// Initializes the Windows low-latency environment
 /// Call this at application startup
 pub fn init_low_latency_env() -> io::Result<()> {
-    // Lock 8GB of working set (leaving room for OS and other processes within 10GB limit)
-    lock_working_set(4 * 1024 * 1024 * 1024, 8 * 1024 * 1024 * 1024)?;
+    // Lock 6GB of working set (leaving room for OS and other processes within 10GB limit)
+    // Reduced from 8GB to accommodate Python/Nautilus and Frontend within strict 10GB ceiling
+    lock_working_set(3 * 1024 * 1024 * 1024, 6 * 1024 * 1024 * 1024)?;
     
     // Configure process-wide CPU affinity
     configure_process_affinity()?;

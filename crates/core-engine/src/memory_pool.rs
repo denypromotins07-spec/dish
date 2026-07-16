@@ -127,7 +127,7 @@ impl MemoryPool {
             
             // Update peak usage
             let current = self.allocations.load(Ordering::Relaxed) 
-                - self.deallocations.load(Ordering::Relaxed);
+                .saturating_sub(self.deallocations.load(Ordering::Relaxed));
             let mut peak = self.peak_usage.load(Ordering::Relaxed);
             while current > peak {
                 match self.peak_usage.compare_exchange_weak(
@@ -143,6 +143,7 @@ impl MemoryPool {
                 size,
                 pool: self,
                 slab_idx,
+                _marker: std::marker::PhantomData,
             }
         })
     }
@@ -188,6 +189,7 @@ pub struct PoolBuffer<'a> {
     size: usize,
     pool: &'a MemoryPool,
     slab_idx: usize,
+    _marker: std::marker::PhantomData<&'a ()>,
 }
 
 unsafe impl<'a> Send for PoolBuffer<'a> {}
